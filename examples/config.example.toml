@@ -1,0 +1,19 @@
+# Example configuration file for flux-delegate-starter
+# This is optional - you can also use environment variables or CLI flags
+
+[rpc]
+host = "127.0.0.1"
+port = 16124
+timeout = 30
+
+# Optional: Specify username/password instead of cookie
+# username = "your_rpc_username"
+# password = "your_rpc_password"
+
+# Optional: Custom cookie path
+# cookie_path = "/path/to/.cookie"
+
+[output]
+format = "rich"  # Options: rich, json, plain
+verbose = false
+debug = false

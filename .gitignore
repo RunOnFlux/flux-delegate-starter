@@ -1,0 +1,55 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+venv/
+env/
+
+# Sensitive data - NEVER commit these!
+.env
+*.key
+*.key.age
+*.pem
+private_keys.txt
+collaterals.yaml
+secrets/
+*.pub
+
+# Scratch debugging scripts and dev notes - not part of the package
+/analyze_working_tx.py
+/debug_coincurve.py
+/debug_tx.py
+/find_recovery_id.py
+/parse_delegates.py
+/test_coincurve_recovery.py
+/test_signature_fix.py
+/verify_format.py
+/PYTHON_FIXES.md
+/PYTHON_ISSUES.md
+/SIGNATURE_BUG_FIX.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

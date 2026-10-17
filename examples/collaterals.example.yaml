@@ -1,0 +1,60 @@
+# Example YAML file for batch starting fluxnodes
+# All examples below show the different supported formats
+
+fluxnodes:
+  # Example 1: Minimal (using defaults)
+  # - collateral_index defaults to 0
+  # - Using inline keys
+  - label: "node-1-minimal"
+    collateral_txhash: "1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d0"
+    delegate_key: "KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU73sVHnoWn"
+    fluxnode_pubkey: "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+
+  # Example 2: Using fluxnode private key (pubkey will be derived automatically)
+  - label: "node-2-derive-pubkey"
+    collateral_txhash: "2075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d0"
+    collateral_index: 0
+    delegate_key: "KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU73sVHnoWn"
+    fluxnode_privkey: "L3MnQhBwxvKiJ5TKxHgCdeWPRzkYSdXqXT3qYjG8aE9XfC7vZqQ"
+
+  # Example 3: Using delegate key file (encrypted with age)
+  # Note: You'll be prompted for passphrase when running batch command
+  # Or use: echo "mypassphrase" | flux-delegate-starter batch collaterals.yaml
+  - label: "node-3-key-file"
+    collateral_txhash: "3075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d0"
+    collateral_index: 1
+    delegate_key_file: "delegate.key.age"
+    fluxnode_pubkey: "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+
+  # Example 4: All options (key files + privkey derivation)
+  - label: "node-4-all-options"
+    collateral_txhash: "4075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d0"
+    collateral_index: 2
+    delegate_key_file: "~/.flux-keys/node4-delegate.key.age"
+    fluxnode_privkey: "L3MnQhBwxvKiJ5TKxHgCdeWPRzkYSdXqXT3qYjG8aE9XfC7vZqQ"
+
+  # Example 5: Uncompressed fluxnode pubkey (will be auto-converted to compressed)
+  - label: "node-5-uncompressed"
+    collateral_txhash: "5075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d0"
+    delegate_key: "KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU73sVHnoWn"
+    fluxnode_pubkey: "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8"
+
+# Field Reference:
+# - label: Human-readable name for the node (required)
+# - collateral_txhash: Collateral transaction hash - 64 hex chars (required)
+# - collateral_index: Collateral output index (optional, default: 0)
+#
+# Delegate Key (choose ONE):
+#   - delegate_key: Inline WIF private key
+#   - delegate_key_file: Path to key file (plain or age-encrypted)
+#
+# Fluxnode Key (choose ONE):
+#   - fluxnode_pubkey: Public key as hex (66 chars compressed or 130 uncompressed)
+#   - fluxnode_privkey: Private key in WIF format (pubkey will be derived)
+#
+# Encryption Notes:
+# - If using delegate_key_file with encrypted .key.age files:
+#   1. Provide via command option: flux-delegate-starter batch --passphrase "mypass" file.yaml
+#   2. Pipe passphrase via stdin: echo "mypass" | flux-delegate-starter batch file.yaml
+#   3. The SAME passphrase will be used for ALL encrypted key files in the batch
+#   4. If files have different passphrases, use multiple batch commands
