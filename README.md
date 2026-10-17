@@ -170,6 +170,8 @@ flux-delegate-starter start [OPTIONS] COLLATERAL_TXHASH
 ```
 
 **Required Options (one of each):**
+- `--collateral-pubkey`: P2PKH collateral public key (hex, e.g. Zelcore `t1...`), OR
+- `--collateral-redeemscript`: P2SH multisig collateral redeem script (hex, e.g. SSP `t3...`)
 - `--fluxnode-pubkey`: Fluxnode public key (hex), OR
 - `--fluxnode-privkey`: Fluxnode private key (WIF) - will derive pubkey
 - `--delegate-key`: Delegate private key (WIF), OR
@@ -185,6 +187,20 @@ flux-delegate-starter start [OPTIONS] COLLATERAL_TXHASH
 - `--decode`: Decode transaction before sending
 - `--host`: RPC host (default: 127.0.0.1)
 - `--port`: RPC port (default: 16124)
+
+**P2SH / SSP collateral:**
+
+For a multisig collateral created through SSP (an address starting `t3...`), pass its
+redeem script instead of a pubkey. SSP shows the Redeem Script in the node's details.
+
+```bash
+flux-delegate-starter start <collateral_txhash> \
+  --collateral-redeemscript <redeem_script_hex> \
+  --fluxnode-privkey <fluxnode_wif> \
+  --delegate-key-file delegate.key.age
+```
+
+`batch` collaterals (via YAML) only support P2PKH (`--collateral-pubkey`) collateral.
 
 ### `batch`
 
@@ -229,6 +245,8 @@ flux-delegate-starter build COLLATERAL_TXHASH [OPTIONS]
 ```
 
 **Required Options (one of each):**
+- `--collateral-pubkey`: P2PKH collateral public key (hex), OR
+- `--collateral-redeemscript`: P2SH multisig collateral redeem script (hex)
 - `--fluxnode-pubkey`: Fluxnode public key (hex), OR
 - `--fluxnode-privkey`: Fluxnode private key (WIF) - will derive pubkey
 - `--delegate-key`: Delegate private key (WIF), OR
@@ -482,6 +500,7 @@ uv run ruff format
 uv run ruff check
 
 # Type checking
+uv run ty check
 uv run pyright
 ```
 

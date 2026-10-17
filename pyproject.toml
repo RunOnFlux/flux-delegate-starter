@@ -1,6 +1,6 @@
 [project]
 name = "flux-delegate-starter"
-version = "0.1.0"
+version = "0.2.0"
 description = "Build and send raw delegated fluxnode START transactions"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -46,6 +46,7 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.0.0",
     "ruff>=0.14.13",
+    "ty>=0.0.89",
 ]
 
 [tool.uv]
@@ -71,3 +72,11 @@ select = [
     "ARG", # flake8-unused-arguments
     "SIM", # flake8-simplify
 ]
+
+[tool.ruff.lint.flake8-bugbear]
+# typer.Option(...)/typer.Argument(...) as argument defaults is the required
+# Typer idiom, not the mutable-default-argument bug B008 flags.
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
+
+[tool.pyright]
+include = ["src", "tests"]

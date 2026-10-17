@@ -1,11 +1,11 @@
 """Tests for RPC client."""
 
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from flux_delegate_starter.exceptions import ConfigError, RPCError
 from flux_delegate_starter.rpc_client import FluxRPCClient
-from flux_delegate_starter.exceptions import RPCError, ConfigError
 
 
 class TestFluxRPCClient:
@@ -35,14 +35,16 @@ class TestFluxRPCClient:
         client = FluxRPCClient(username="user", password="pass")
 
         mock_response = MagicMock()
-        mock_response.json = AsyncMock(return_value={
-            "result": {"blocks": 12345},
-            "error": None,
-            "id": 1,
-        })
+        mock_response.json = AsyncMock(
+            return_value={
+                "result": {"blocks": 12345},
+                "error": None,
+                "id": 1,
+            }
+        )
         mock_response.raise_for_status = MagicMock()
 
-        with patch('aiohttp.ClientSession.post') as mock_post:
+        with patch("aiohttp.ClientSession.post") as mock_post:
             mock_post.return_value.__aenter__.return_value = mock_response
 
             result = await client.call("getblockchaininfo")
@@ -55,14 +57,16 @@ class TestFluxRPCClient:
         client = FluxRPCClient(username="user", password="pass")
 
         mock_response = MagicMock()
-        mock_response.json = AsyncMock(return_value={
-            "result": None,
-            "error": {"code": -1, "message": "Test error"},
-            "id": 1,
-        })
+        mock_response.json = AsyncMock(
+            return_value={
+                "result": None,
+                "error": {"code": -1, "message": "Test error"},
+                "id": 1,
+            }
+        )
         mock_response.raise_for_status = MagicMock()
 
-        with patch('aiohttp.ClientSession.post') as mock_post:
+        with patch("aiohttp.ClientSession.post") as mock_post:
             mock_post.return_value.__aenter__.return_value = mock_response
 
             with pytest.raises(RPCError) as exc_info:
@@ -78,7 +82,7 @@ class TestFluxRPCClient:
 
         expected_txid = "0123456789abcdef" * 8
 
-        with patch.object(client, 'call', new_callable=AsyncMock) as mock_call:
+        with patch.object(client, "call", new_callable=AsyncMock) as mock_call:
             mock_call.return_value = expected_txid
 
             txid = await client.send_raw_transaction("deadbeef")
@@ -93,7 +97,7 @@ class TestFluxRPCClient:
 
         expected_result = {"txid": "abc123", "version": 6}
 
-        with patch.object(client, 'call', new_callable=AsyncMock) as mock_call:
+        with patch.object(client, "call", new_callable=AsyncMock) as mock_call:
             mock_call.return_value = expected_result
 
             result = await client.decode_raw_transaction("deadbeef")
@@ -108,7 +112,7 @@ class TestFluxRPCClient:
 
         expected_result = {"chain": "main", "blocks": 12345}
 
-        with patch.object(client, 'call', new_callable=AsyncMock) as mock_call:
+        with patch.object(client, "call", new_callable=AsyncMock) as mock_call:
             mock_call.return_value = expected_result
 
             result = await client.get_blockchain_info()

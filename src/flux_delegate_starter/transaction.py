@@ -3,9 +3,13 @@
 import struct
 import time
 from dataclasses import dataclass
-from typing import Optional
 
-from .crypto import hash256, sha256, sign_compact, privkey_to_pubkey, verify_compact_signature
+from .crypto import (
+    hash256,
+    privkey_to_pubkey,
+    sign_compact,
+    verify_compact_signature,
+)
 from .exceptions import TransactionError
 
 
@@ -30,11 +34,11 @@ def encode_compact_size(size: int) -> bytes:
     elif size < 253:
         return bytes([size])
     elif size <= 0xFFFF:
-        return b'\xFD' + struct.pack('<H', size)
+        return b"\xfd" + struct.pack("<H", size)
     elif size <= 0xFFFFFFFF:
-        return b'\xFE' + struct.pack('<I', size)
+        return b"\xfe" + struct.pack("<I", size)
     else:
-        return b'\xFF' + struct.pack('<Q', size)
+        return b"\xff" + struct.pack("<Q", size)
 
 
 @dataclass
@@ -46,21 +50,24 @@ class COutPoint:
         txhash: 32-byte transaction hash (little-endian)
         index: Output index (uint32_t)
     """
+
     txhash: bytes  # 32 bytes, little-endian
-    index: int     # uint32_t
+    index: int  # uint32_t
 
     def __post_init__(self):
         if len(self.txhash) != 32:
-            raise ValueError(f"Transaction hash must be 32 bytes, got {len(self.txhash)}")
+            raise ValueError(
+                f"Transaction hash must be 32 bytes, got {len(self.txhash)}"
+            )
         if self.index < 0 or self.index > 0xFFFFFFFF:
             raise ValueError(f"Index must be uint32_t, got {self.index}")
 
     def serialize(self) -> bytes:
         """Serialize outpoint to bytes."""
-        return self.txhash + struct.pack('<I', self.index)
+        return self.txhash + struct.pack("<I", self.index)
 
     @classmethod
-    def from_hex(cls, txhash_hex: str, index: int) -> 'COutPoint':
+    def from_hex(cls, txhash_hex: str, index: int) -> "COutPoint":
         """
         Create COutPoint from hex string.
 
@@ -72,7 +79,9 @@ class COutPoint:
             COutPoint instance
         """
         if len(txhash_hex) != 64:
-            raise ValueError(f"Transaction hash must be 64 hex chars, got {len(txhash_hex)}")
+            raise ValueError(
+                f"Transaction hash must be 64 hex chars, got {len(txhash_hex)}"
+            )
 
         # Convert hex to bytes and reverse to little-endian
         txhash_bytes = bytes.fromhex(txhash_hex)[::-1]
@@ -92,6 +101,7 @@ class CFluxnodeDelegates:
                1 = ALL
                2 = SIGNING (default - no keys serialized)
     """
+
     nDelegateVersion: int = 1
     nType: int = 2  # SIGNING type
 
@@ -108,8 +118,8 @@ class CFluxnodeDelegates:
         For SIGNING type (nType=2), no keys are serialized.
         Only version + type = 2 bytes.
         """
-        data = struct.pack('b', self.nDelegateVersion)
-        data += struct.pack('b', self.nType)
+        data = struct.pack("b", self.nDelegateVersion)
+        data += struct.pack("b", self.nType)
 
         # For SIGNING type, no additional data
         # For ALL type (1), would serialize keys here
@@ -129,7 +139,8 @@ class FluxnodeStartTransaction:
     # Constants
     FLUXNODE_TX_VERSION = 6
     FLUXNODE_START_TX_TYPE = 0x02
-    FLUX_TX_VERSION_NORMAL = 0x0001
+    FLUX_TX_VERSION_NORMAL = 0x0001  # P2PKH (single-key) collateral
+    FLUX_TX_VERSION_P2SH = 0x0002  # P2SH (multisig, e.g. SSP) collateral
     FLUX_TX_VERSION_DELEGATES = 0x0100
     OVERWINTERED_FLAG = 0  # Not overwintered
 
@@ -137,33 +148,81 @@ class FluxnodeStartTransaction:
         self,
         collateral_txhash: str,
         collateral_index: int,
-        collateral_pubkey: bytes,
-        fluxnode_pubkey: bytes,
-        sig_time: Optional[int] = None,
+        collateral_pubkey: bytes | None = None,
+        fluxnode_pubkey: bytes | None = None,
+        sig_time: int | None = None,
+        collateral_redeemscript: bytes | None = None,
     ):
         """
         Initialize fluxnode start transaction.
 
+        Collateral is proven one of two mutually exclusive ways:
+        - P2PKH (single-key, e.g. Zelcore `t1...`): pass `collateral_pubkey`.
+        - P2SH (multisig, e.g. SSP `t3...`): pass `collateral_redeemscript`, the
+          raw multisig redeem script (`OP_m <pubkeys...> OP_n OP_CHECKMULTISIG`).
+          The delegate still signs with a single signature; the redeem script
+          only proves which multisig the collateral belongs to.
+
         Args:
             collateral_txhash: Collateral transaction hash (hex string, 64 chars)
             collateral_index: Collateral output index
-            collateral_pubkey: Collateral public key (33 bytes compressed or 65 bytes uncompressed)
+            collateral_pubkey: P2PKH collateral public key (33 bytes compressed or 65 bytes uncompressed)
             fluxnode_pubkey: Fluxnode public key (33 bytes compressed or 65 bytes uncompressed)
             sig_time: Signature timestamp (default: current time)
+            collateral_redeemscript: P2SH collateral redeem script, mutually exclusive with collateral_pubkey
         """
-        # Validate collateral pubkey format
-        if len(collateral_pubkey) not in (33, 65):
+        self.isP2SH = collateral_redeemscript is not None
+        if self.isP2SH and collateral_pubkey is not None:
             raise TransactionError(
-                f"Collateral pubkey must be 33 bytes (compressed) or 65 bytes (uncompressed), "
-                f"got {len(collateral_pubkey)}"
+                "Provide collateral_pubkey (P2PKH) OR collateral_redeemscript (P2SH), not both"
             )
+        if not self.isP2SH and collateral_pubkey is None:
+            raise TransactionError(
+                "Must provide collateral_pubkey (P2PKH) or collateral_redeemscript (P2SH)"
+            )
+        if fluxnode_pubkey is None:
+            raise TransactionError("fluxnode_pubkey is required")
 
-        # Validate collateral pubkey prefix bytes
-        first_byte = collateral_pubkey[0]
-        if len(collateral_pubkey) == 33 and first_byte not in (0x02, 0x03):
-            raise TransactionError(f"Compressed collateral pubkey must start with 0x02 or 0x03, got {first_byte:#04x}")
-        if len(collateral_pubkey) == 65 and first_byte not in (0x04, 0x06, 0x07):
-            raise TransactionError(f"Uncompressed collateral pubkey must start with 0x04, 0x06, or 0x07, got {first_byte:#04x}")
+        if self.isP2SH:
+            # Client-side sanity check only; consensus validates this is a real
+            # multisig template (and matches the collateral UTXO) on-chain.
+            if (
+                not isinstance(collateral_redeemscript, (bytes, bytearray))
+                or len(collateral_redeemscript) == 0
+            ):
+                raise TransactionError(
+                    "collateral_redeemscript must be non-empty bytes"
+                )
+            if len(collateral_redeemscript) > 10_000:
+                raise TransactionError(
+                    f"collateral_redeemscript implausibly long ({len(collateral_redeemscript)} bytes)"
+                )
+            if collateral_redeemscript[-1] != 0xAE:  # OP_CHECKMULTISIG
+                raise TransactionError(
+                    "collateral_redeemscript should end in OP_CHECKMULTISIG (0xAE) — "
+                    "pass the raw multisig redeem script"
+                )
+            collateral_redeemscript = bytes(collateral_redeemscript)
+        else:
+            # Guaranteed non-None by the mutual-exclusivity check above.
+            assert collateral_pubkey is not None
+            # Validate collateral pubkey format
+            if len(collateral_pubkey) not in (33, 65):
+                raise TransactionError(
+                    f"Collateral pubkey must be 33 bytes (compressed) or 65 bytes (uncompressed), "
+                    f"got {len(collateral_pubkey)}"
+                )
+
+            # Validate collateral pubkey prefix bytes
+            first_byte = collateral_pubkey[0]
+            if len(collateral_pubkey) == 33 and first_byte not in (0x02, 0x03):
+                raise TransactionError(
+                    f"Compressed collateral pubkey must start with 0x02 or 0x03, got {first_byte:#04x}"
+                )
+            if len(collateral_pubkey) == 65 and first_byte not in (0x04, 0x06, 0x07):
+                raise TransactionError(
+                    f"Uncompressed collateral pubkey must start with 0x04, 0x06, or 0x07, got {first_byte:#04x}"
+                )
 
         # Validate fluxnode pubkey format
         if len(fluxnode_pubkey) not in (33, 65):
@@ -175,24 +234,32 @@ class FluxnodeStartTransaction:
         # Validate fluxnode pubkey prefix bytes
         first_byte = fluxnode_pubkey[0]
         if len(fluxnode_pubkey) == 33 and first_byte not in (0x02, 0x03):
-            raise TransactionError(f"Compressed fluxnode pubkey must start with 0x02 or 0x03, got {first_byte:#04x}")
+            raise TransactionError(
+                f"Compressed fluxnode pubkey must start with 0x02 or 0x03, got {first_byte:#04x}"
+            )
         if len(fluxnode_pubkey) == 65 and first_byte not in (0x04, 0x06, 0x07):
-            raise TransactionError(f"Uncompressed fluxnode pubkey must start with 0x04, 0x06, or 0x07, got {first_byte:#04x}")
+            raise TransactionError(
+                f"Uncompressed fluxnode pubkey must start with 0x04, 0x06, or 0x07, got {first_byte:#04x}"
+            )
 
         # Set fields
         self.nVersion = self.FLUXNODE_TX_VERSION
         self.nType = self.FLUXNODE_START_TX_TYPE
-        self.nFluxTxVersion = self.FLUX_TX_VERSION_NORMAL | self.FLUX_TX_VERSION_DELEGATES
+        collateral_flag = (
+            self.FLUX_TX_VERSION_P2SH if self.isP2SH else self.FLUX_TX_VERSION_NORMAL
+        )
+        self.nFluxTxVersion = collateral_flag | self.FLUX_TX_VERSION_DELEGATES
 
         self.collateralIn = COutPoint.from_hex(collateral_txhash, collateral_index)
-        self.collateralPubkey = collateral_pubkey
+        self.collateralPubkey = collateral_pubkey  # None in P2SH mode
+        self.collateralRedeemScript = collateral_redeemscript  # None in P2PKH mode
         self.pubKey = fluxnode_pubkey
         self.sigTime = sig_time if sig_time is not None else int(time.time())
 
         self.fUsingDelegates = True
         self.delegateData = CFluxnodeDelegates()
 
-        self.sig = b''  # Set during signing
+        self.sig = b""  # Set during signing
 
     def _serialize_base(self) -> bytes:
         """
@@ -201,32 +268,42 @@ class FluxnodeStartTransaction:
         Returns:
             Serialized base transaction bytes
         """
-        data = b''
+        data = b""
 
         # Header: nVersion | (fOverwintered << 31)
         # fOverwintered = 0 for fluxnode transactions
         header = self.nVersion | (self.OVERWINTERED_FLAG << 31)
-        data += struct.pack('<I', header)
+        data += struct.pack("<I", header)
 
         # nType (int8_t)
-        data += struct.pack('b', self.nType)
+        data += struct.pack("b", self.nType)
 
         # nFluxTxVersion (int32_t)
-        data += struct.pack('<i', self.nFluxTxVersion)
+        data += struct.pack("<i", self.nFluxTxVersion)
 
         # collateralIn (COutPoint: 36 bytes)
         data += self.collateralIn.serialize()
 
-        # collateralPubkey (compact size + pubkey bytes)
-        data += encode_compact_size(len(self.collateralPubkey))
-        data += self.collateralPubkey
-
-        # pubKey (fluxnode pubkey - compact size + pubkey bytes)
-        data += encode_compact_size(len(self.pubKey))
-        data += self.pubKey
+        # Collateral proof + fluxnode pubkey. Presence and order differ by
+        # collateral type, matching the on-chain wire format for each:
+        if self.isP2SH:
+            # P2SH: fluxnode pubkey, then the collateral redeem script. There
+            # is no collateralPubkey field at all in this mode.
+            assert self.collateralRedeemScript is not None
+            data += encode_compact_size(len(self.pubKey))
+            data += self.pubKey
+            data += encode_compact_size(len(self.collateralRedeemScript))
+            data += self.collateralRedeemScript
+        else:
+            # P2PKH: collateral pubkey, then fluxnode pubkey
+            assert self.collateralPubkey is not None
+            data += encode_compact_size(len(self.collateralPubkey))
+            data += self.collateralPubkey
+            data += encode_compact_size(len(self.pubKey))
+            data += self.pubKey
 
         # sigTime (uint32_t)
-        data += struct.pack('<I', self.sigTime)
+        data += struct.pack("<I", self.sigTime)
 
         return data
 
@@ -243,7 +320,7 @@ class FluxnodeStartTransaction:
 
         # Delegate data (part of hash, comes after sigTime)
         # fUsingDelegates (bool - 1 byte)
-        data += b'\x01' if self.fUsingDelegates else b'\x00'
+        data += b"\x01" if self.fUsingDelegates else b"\x00"
 
         # delegateData (only if fUsingDelegates is true)
         if self.fUsingDelegates:
@@ -268,7 +345,7 @@ class FluxnodeStartTransaction:
 
         # Delegate data comes after signature
         # fUsingDelegates (bool - 1 byte)
-        data += b'\x01' if self.fUsingDelegates else b'\x00'
+        data += b"\x01" if self.fUsingDelegates else b"\x00"
 
         # delegateData (only if fUsingDelegates is true)
         if self.fUsingDelegates:
@@ -321,7 +398,7 @@ class FluxnodeStartTransaction:
             # NOTE: C++ serializes strings with compact size prefix
             message_magic = b"Zelcash Signed Message:\n"
             # IMPORTANT: C++ GetHex() reverses the bytes!
-            tx_hash_hex = tx_hash[::-1].hex().encode('ascii')
+            tx_hash_hex = tx_hash[::-1].hex().encode("ascii")
 
             # Serialize with compact size prefixes (matches C++ string serialization)
             message = encode_compact_size(len(message_magic)) + message_magic
@@ -334,15 +411,19 @@ class FluxnodeStartTransaction:
             self.sig = sign_compact(message_hash, delegate_privkey)
 
             if len(self.sig) != 65:
-                raise TransactionError(f"Signature must be 65 bytes, got {len(self.sig)}")
+                raise TransactionError(
+                    f"Signature must be 65 bytes, got {len(self.sig)}"
+                )
 
             # Verify our own signature immediately
             delegate_pubkey = privkey_to_pubkey(delegate_privkey, compressed=True)
             if not verify_compact_signature(message_hash, self.sig, delegate_pubkey):
-                raise TransactionError("Failed to verify own signature - this should never happen!")
+                raise TransactionError(
+                    "Failed to verify own signature - this should never happen!"
+                )
 
         except Exception as e:
-            raise TransactionError(f"Failed to sign transaction: {e}")
+            raise TransactionError(f"Failed to sign transaction: {e}") from e
 
     def to_hex(self) -> str:
         """
@@ -355,7 +436,9 @@ class FluxnodeStartTransaction:
             TransactionError: If transaction is not signed
         """
         if not self.sig:
-            raise TransactionError("Transaction must be signed before converting to hex")
+            raise TransactionError(
+                "Transaction must be signed before converting to hex"
+            )
 
         return self.serialize_full().hex()
 

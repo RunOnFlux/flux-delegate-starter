@@ -1,12 +1,10 @@
 """Flux RPC client for direct HTTP JSON-RPC communication."""
 
-import json
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import aiohttp
 
-from .exceptions import RPCError, ConfigError
+from .exceptions import ConfigError, RPCError
 
 
 class FluxRPCClient:
@@ -20,8 +18,8 @@ class FluxRPCClient:
         self,
         host: str = "127.0.0.1",
         port: int = 16124,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
+        username: str | None = None,
+        password: str | None = None,
         timeout: int = 30,
     ):
         """
@@ -75,20 +73,22 @@ class FluxRPCClient:
 
         timeout = aiohttp.ClientTimeout(total=self.timeout)
 
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(
+        async with (
+            aiohttp.ClientSession(timeout=timeout) as session,
+            session.post(
                 self.base_url,
                 auth=self._auth,
                 json=payload,
                 headers={"Content-Type": "application/json"},
-            ) as response:
-                response.raise_for_status()
-                result = await response.json()
+            ) as response,
+        ):
+            response.raise_for_status()
+            result = await response.json()
 
-                if result.get("error"):
-                    raise RPCError(result["error"])
+            if result.get("error"):
+                raise RPCError(result["error"])
 
-                return result.get("result")
+            return result.get("result")
 
     async def send_raw_transaction(self, hex_string: str) -> str:
         """
@@ -129,11 +129,7 @@ class FluxRPCClient:
         """
         return await self.call("getblockchaininfo")
 
-    async def get_raw_transaction(
-        self,
-        txid: str,
-        verbose: bool = False
-    ) -> str | dict:
+    async def get_raw_transaction(self, txid: str, verbose: bool = False) -> str | dict:
         """
         Get raw transaction by txid.
 
@@ -165,7 +161,7 @@ class FluxRPCClient:
         self,
         min_conf: int = 1,
         max_conf: int = 9999999,
-        addresses: Optional[list[str]] = None
+        addresses: list[str] | None = None,
     ) -> list[dict]:
         """
         List unspent transaction outputs.
@@ -178,7 +174,7 @@ class FluxRPCClient:
         Returns:
             List of unspent outputs
         """
-        params = [min_conf, max_conf]
+        params: list[Any] = [min_conf, max_conf]
         if addresses:
             params.append(addresses)
 
@@ -212,10 +208,7 @@ class FluxRPCClient:
         return await self.call("getstartlist")
 
     async def start_fluxnode_as_delegate(
-        self,
-        collateral_txhash: str,
-        collateral_index: int,
-        delegate_address: str
+        self, collateral_txhash: str, collateral_index: int, delegate_address: str
     ) -> dict:
         """
         Start fluxnode using high-level RPC command (for comparison).
@@ -232,7 +225,7 @@ class FluxRPCClient:
             "startfluxnodeasdelegate",
             collateral_txhash,
             str(collateral_index),
-            delegate_address
+            delegate_address,
         )
 
     def __repr__(self) -> str:

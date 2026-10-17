@@ -1,7 +1,6 @@
 """Configuration management."""
 
 from pathlib import Path
-from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -26,9 +25,9 @@ class Settings(BaseSettings):
     # RPC Configuration
     rpc_host: str = "127.0.0.1"
     rpc_port: int = 16124
-    rpc_username: Optional[str] = None
-    rpc_password: Optional[str] = None
-    rpc_cookie_path: Optional[Path] = None
+    rpc_username: str | None = None
+    rpc_password: str | None = None
+    rpc_cookie_path: Path | None = None
     rpc_timeout: int = 30
 
     # Output Configuration

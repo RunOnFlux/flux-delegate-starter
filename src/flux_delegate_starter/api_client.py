@@ -3,7 +3,8 @@
 import asyncio
 import json
 import ssl
-from typing import Any, Optional
+from collections.abc import Callable
+from typing import Any
 
 import aiohttp
 import certifi
@@ -36,7 +37,7 @@ class FluxAPIClient:
             max_retries: Maximum number of retry attempts (default: 3)
             retry_delay: Delay between retries in seconds (default: 1.0)
         """
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_delay = retry_delay
@@ -45,12 +46,8 @@ class FluxAPIClient:
         self.ssl_context = ssl.create_default_context(cafile=certifi.where())
 
     async def _make_request_with_retry(
-        self,
-        method: str,
-        url: str,
-        on_retry_callback: Optional[callable] = None,
-        **kwargs
-    ) -> dict:
+        self, method: str, url: str, on_retry_callback: Callable | None = None, **kwargs
+    ) -> Any:
         """
         Make HTTP request with retry logic.
 
@@ -71,26 +68,32 @@ class FluxAPIClient:
 
         for attempt in range(1, self.max_retries + 1):
             try:
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.request(method, url, ssl=self.ssl_context, **kwargs) as response:
-                        response.raise_for_status()
-                        result = await response.json()
+                async with (
+                    aiohttp.ClientSession(timeout=timeout) as session,
+                    session.request(
+                        method, url, ssl=self.ssl_context, **kwargs
+                    ) as response,
+                ):
+                    response.raise_for_status()
+                    result = await response.json()
 
-                        # Check for API error format
-                        if isinstance(result, dict):
-                            # Flux API returns {status: "error", data: {message: ...}} on error
-                            if result.get("status") == "error":
-                                error_msg = result.get("data", {}).get("message", "Unknown error")
-                                raise RPCError({"message": error_msg, "code": -1})
+                    # Check for API error format
+                    if isinstance(result, dict):
+                        # Flux API returns {status: "error", data: {message: ...}} on error
+                        if result.get("status") == "error":
+                            error_msg = result.get("data", {}).get(
+                                "message", "Unknown error"
+                            )
+                            raise RPCError({"message": error_msg, "code": -1})
 
-                            # Success: {status: "success", data: ...}
-                            if result.get("status") == "success":
-                                return result.get("data")
+                        # Success: {status: "success", data: ...}
+                        if result.get("status") == "success":
+                            return result.get("data")
 
                         # Return raw result if not standard format
                         return result
 
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            except (TimeoutError, aiohttp.ClientError) as e:
                 last_error = e
 
                 # Call retry callback before retrying
@@ -101,16 +104,18 @@ class FluxAPIClient:
                     continue
 
         # All retries failed
-        raise RPCError({
-            "message": f"Request failed after {self.max_retries} attempts: {last_error}",
-            "code": -1
-        })
+        raise RPCError(
+            {
+                "message": f"Request failed after {self.max_retries} attempts: {last_error}",
+                "code": -1,
+            }
+        )
 
     async def send_raw_transaction(
         self,
         hex_string: str,
         allow_high_fees: bool = False,
-        on_retry_callback: Optional[callable] = None
+        on_retry_callback: Callable | None = None,
     ) -> str:
         """
         Send raw transaction via public API.
@@ -128,17 +133,14 @@ class FluxAPIClient:
         """
         url = f"{self.base_url}/daemon/sendrawtransaction"
 
-        payload = {
-            "hexstring": hex_string,
-            "allowhighfees": allow_high_fees
-        }
+        payload = {"hexstring": hex_string, "allowhighfees": allow_high_fees}
 
         result = await self._make_request_with_retry(
             "POST",
             url,
             on_retry_callback=on_retry_callback,
             data=json.dumps(payload),
-            headers={}  # Don't set Content-Type so express.json() doesn't intercept
+            headers={},  # Don't set Content-Type so express.json() doesn't intercept
         )
 
         # API returns the txid directly as string
@@ -179,10 +181,10 @@ class FluxAPIClient:
             "POST",
             url,
             data=json.dumps(payload),
-            headers={}  # Don't set Content-Type so express.json() doesn't intercept
+            headers={},  # Don't set Content-Type so express.json() doesn't intercept
         )
 
-    async def list_fluxnodes(self, filter: Optional[str] = None) -> list[dict]:
+    async def list_fluxnodes(self, filter: str | None = None) -> list[dict]:
         """
         List all fluxnodes via public API.
 

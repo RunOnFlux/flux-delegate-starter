@@ -1,7 +1,6 @@
 """Pydantic models for data validation."""
 
 import re
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -65,11 +64,11 @@ class FluxnodeStartRequest(BaseModel):
     collateral: CollateralOutpoint
     fluxnode_pubkey: PublicKey
     delegate_key: PrivateKeyWIF
-    sig_time: Optional[int] = Field(None, description="Signature timestamp")
+    sig_time: int | None = Field(None, description="Signature timestamp")
 
     @field_validator("sig_time")
     @classmethod
-    def validate_sig_time(cls, v: Optional[int]) -> Optional[int]:
+    def validate_sig_time(cls, v: int | None) -> int | None:
         """Validate signature timestamp."""
         if v is not None and v < 0:
             raise ValueError("Signature time must be positive")
@@ -97,9 +96,9 @@ class RPCConfig(BaseModel):
 
     host: str = Field(default="127.0.0.1", description="RPC host")
     port: int = Field(default=16124, description="RPC port", ge=1, le=65535)
-    username: Optional[str] = Field(None, description="RPC username")
-    password: Optional[str] = Field(None, description="RPC password")
-    cookie_path: Optional[str] = Field(None, description="Path to .cookie file")
+    username: str | None = Field(None, description="RPC username")
+    password: str | None = Field(None, description="RPC password")
+    cookie_path: str | None = Field(None, description="Path to .cookie file")
     timeout: int = Field(default=30, description="Request timeout in seconds", ge=1)
 
 
@@ -108,16 +107,20 @@ class BatchStartItem(BaseModel):
 
     label: str = Field(..., description="Human-readable label")
     collateral_txhash: str = Field(..., description="Collateral transaction hash")
-    collateral_index: int = Field(default=0, ge=0, description="Collateral output index (default: 0)")
+    collateral_index: int = Field(
+        default=0, ge=0, description="Collateral output index (default: 0)"
+    )
     collateral_pubkey: str = Field(..., description="Collateral public key (hex)")
 
     # Delegate key: either inline WIF or file path
-    delegate_key: Optional[str] = Field(None, description="Delegate private key (WIF)")
-    delegate_key_file: Optional[str] = Field(None, description="Path to delegate key file")
+    delegate_key: str | None = Field(None, description="Delegate private key (WIF)")
+    delegate_key_file: str | None = Field(None, description="Path to delegate key file")
 
     # Fluxnode key: either pubkey (hex) or privkey (WIF)
-    fluxnode_pubkey: Optional[str] = Field(None, description="Fluxnode public key (hex)")
-    fluxnode_privkey: Optional[str] = Field(None, description="Fluxnode private key (WIF) - will derive pubkey")
+    fluxnode_pubkey: str | None = Field(None, description="Fluxnode public key (hex)")
+    fluxnode_privkey: str | None = Field(
+        None, description="Fluxnode private key (WIF) - will derive pubkey"
+    )
 
     @field_validator("collateral_txhash")
     @classmethod
@@ -146,7 +149,7 @@ class BatchStartItem(BaseModel):
 
     @field_validator("fluxnode_pubkey")
     @classmethod
-    def validate_pubkey(cls, v: Optional[str]) -> Optional[str]:
+    def validate_pubkey(cls, v: str | None) -> str | None:
         """Validate public key format (compressed or uncompressed)."""
         if v is None:
             return None
@@ -166,7 +169,7 @@ class BatchStartItem(BaseModel):
 
     @field_validator("delegate_key")
     @classmethod
-    def validate_wif(cls, v: Optional[str]) -> Optional[str]:
+    def validate_wif(cls, v: str | None) -> str | None:
         """Validate WIF format."""
         if v is None:
             return None
@@ -176,7 +179,7 @@ class BatchStartItem(BaseModel):
 
     @field_validator("fluxnode_privkey")
     @classmethod
-    def validate_fluxnode_privkey(cls, v: Optional[str]) -> Optional[str]:
+    def validate_fluxnode_privkey(cls, v: str | None) -> str | None:
         """Validate fluxnode privkey WIF format."""
         if v is None:
             return None
@@ -184,8 +187,8 @@ class BatchStartItem(BaseModel):
             raise ValueError("Invalid WIF format")
         return v
 
-    @model_validator(mode='after')
-    def validate_keys(self) -> 'BatchStartItem':
+    @model_validator(mode="after")
+    def validate_keys(self) -> "BatchStartItem":
         """Validate that required keys are provided."""
         # Must have either delegate_key or delegate_key_file
         if not self.delegate_key and not self.delegate_key_file:
@@ -207,11 +210,11 @@ class BatchStartResult(BaseModel):
 
     label: str
     success: bool
-    txid: Optional[str] = None
-    error: Optional[str] = None
+    txid: str | None = None
+    error: str | None = None
 
-    @model_validator(mode='after')
-    def check_success_fields(self) -> 'BatchStartResult':
+    @model_validator(mode="after")
+    def check_success_fields(self) -> "BatchStartResult":
         """Validate success/error field consistency."""
         if self.success and not self.txid:
             raise ValueError("Success=True requires txid")

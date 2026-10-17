@@ -1,10 +1,9 @@
 """Secure key management with age encryption."""
 
+import getpass
 import os
 import sys
-import getpass
 from pathlib import Path
-from typing import Tuple, Optional
 
 import pyrage
 
@@ -18,7 +17,7 @@ class DelegateKeyManager:
     AGE_ARMOR_PREFIX = "-----BEGIN AGE ENCRYPTED FILE-----"
 
     @staticmethod
-    def generate_keypair() -> Tuple[bytes, bytes]:
+    def generate_keypair() -> tuple[bytes, bytes]:
         """
         Generate a new secp256k1 keypair for delegate use.
 
@@ -34,7 +33,7 @@ class DelegateKeyManager:
         return privkey, pubkey
 
     @staticmethod
-    def read_passphrase_from_stdin() -> Optional[str]:
+    def read_passphrase_from_stdin() -> str | None:
         """
         Read passphrase from stdin if available.
 
@@ -43,7 +42,7 @@ class DelegateKeyManager:
         """
         # Only read from stdin if it's NOT a terminal (i.e., piped/redirected)
         if not sys.stdin.isatty():
-            passphrase = sys.stdin.readline().rstrip('\n\r')
+            passphrase = sys.stdin.readline().rstrip("\n\r")
             return passphrase if passphrase else None
         return None
 
@@ -83,10 +82,14 @@ class DelegateKeyManager:
             Age-encrypted armored string
         """
         # Encrypt with passphrase (armored=True for ASCII output)
-        encrypted = pyrage.passphrase.encrypt(privkey_wif.encode('utf-8'), passphrase, armored=True)
+        # pyrage is a Rust extension with no type stubs; its real members
+        # aren't visible to static analysis.
+        encrypted = pyrage.passphrase.encrypt(  # ty: ignore[unresolved-attribute]  # pyright: ignore[reportAttributeAccessIssue]
+            privkey_wif.encode("utf-8"), passphrase, armored=True
+        )
 
         # Return armored format
-        return encrypted.decode('utf-8')
+        return encrypted.decode("utf-8")
 
     @staticmethod
     def decrypt_key(encrypted_data: str, passphrase: str) -> str:
@@ -104,12 +107,18 @@ class DelegateKeyManager:
             ValueError: If decryption fails
         """
         try:
-            decrypted = pyrage.passphrase.decrypt(encrypted_data.encode('utf-8'), passphrase)
-            return decrypted.decode('utf-8')
-        except pyrage.DecryptError:
-            raise ValueError("Incorrect passphrase or corrupted age-encrypted data")
+            # pyrage is a Rust extension with no type stubs; its real members
+            # aren't visible to static analysis.
+            decrypted = pyrage.passphrase.decrypt(  # ty: ignore[unresolved-attribute]  # pyright: ignore[reportAttributeAccessIssue]
+                encrypted_data.encode("utf-8"), passphrase
+            )
+            return decrypted.decode("utf-8")
+        except pyrage.DecryptError as e:  # ty: ignore[unresolved-attribute]  # pyright: ignore[reportAttributeAccessIssue]
+            raise ValueError(
+                "Incorrect passphrase or corrupted age-encrypted data"
+            ) from e
         except Exception as e:
-            raise ValueError(f"Age decryption error: {e}")
+            raise ValueError(f"Age decryption error: {e}") from e
 
     @staticmethod
     def is_encrypted(data: str) -> bool:
@@ -125,7 +134,7 @@ class DelegateKeyManager:
         return data.strip().startswith(DelegateKeyManager.AGE_ARMOR_PREFIX)
 
     @staticmethod
-    def load_key(key_path: Path, passphrase: Optional[str] = None) -> str:
+    def load_key(key_path: Path, passphrase: str | None = None) -> str:
         """
         Load a private key from file, decrypting if necessary.
 
@@ -157,12 +166,14 @@ class DelegateKeyManager:
 
                 # If still None, prompt interactively
                 if passphrase is None:
-                    passphrase = getpass.getpass(f"Enter passphrase for {key_path.name}: ")
+                    passphrase = getpass.getpass(
+                        f"Enter passphrase for {key_path.name}: "
+                    )
 
             try:
                 return DelegateKeyManager.decrypt_key(key_data, passphrase)
             except ValueError as e:
-                raise ConfigError(str(e))
+                raise ConfigError(str(e)) from e
         else:
             # Not encrypted, return as-is
             return key_data
@@ -172,7 +183,7 @@ class DelegateKeyManager:
         privkey_wif: str,
         output_path: Path,
         encrypt: bool = True,
-        passphrase: Optional[str] = None
+        passphrase: str | None = None,
     ) -> None:
         """
         Save a private key to file, optionally encrypting it.

@@ -1,16 +1,17 @@
 """Tests for transaction building and serialization."""
 
-import pytest
 import struct
 
-from flux_delegate_starter.transaction import (
-    encode_compact_size,
-    COutPoint,
-    CFluxnodeDelegates,
-    FluxnodeStartTransaction,
-)
-from flux_delegate_starter.crypto import decode_wif, privkey_to_pubkey
+import pytest
+
+from flux_delegate_starter.crypto import decode_wif
 from flux_delegate_starter.exceptions import TransactionError
+from flux_delegate_starter.transaction import (
+    CFluxnodeDelegates,
+    COutPoint,
+    FluxnodeStartTransaction,
+    encode_compact_size,
+)
 
 
 class TestCompactSize:
@@ -18,24 +19,26 @@ class TestCompactSize:
 
     def test_small_values(self):
         """Test encoding values < 253."""
-        assert encode_compact_size(0) == b'\x00'
-        assert encode_compact_size(1) == b'\x01'
-        assert encode_compact_size(252) == b'\xFC'
+        assert encode_compact_size(0) == b"\x00"
+        assert encode_compact_size(1) == b"\x01"
+        assert encode_compact_size(252) == b"\xfc"
 
     def test_medium_values(self):
         """Test encoding values 253-65535."""
-        assert encode_compact_size(253) == b'\xFD\xFD\x00'
-        assert encode_compact_size(255) == b'\xFD\xFF\x00'
-        assert encode_compact_size(65535) == b'\xFD\xFF\xFF'
+        assert encode_compact_size(253) == b"\xfd\xfd\x00"
+        assert encode_compact_size(255) == b"\xfd\xff\x00"
+        assert encode_compact_size(65535) == b"\xfd\xff\xff"
 
     def test_large_values(self):
         """Test encoding values 65536-4294967295."""
-        assert encode_compact_size(65536) == b'\xFE\x00\x00\x01\x00'
-        assert encode_compact_size(0xFFFFFFFF) == b'\xFE\xFF\xFF\xFF\xFF'
+        assert encode_compact_size(65536) == b"\xfe\x00\x00\x01\x00"
+        assert encode_compact_size(0xFFFFFFFF) == b"\xfe\xff\xff\xff\xff"
 
     def test_very_large_values(self):
         """Test encoding values > 4294967295."""
-        assert encode_compact_size(0x100000000) == b'\xFF\x00\x00\x00\x00\x01\x00\x00\x00'
+        assert (
+            encode_compact_size(0x100000000) == b"\xff\x00\x00\x00\x00\x01\x00\x00\x00"
+        )
 
     def test_negative_values(self):
         """Test that negative values raise ValueError."""
@@ -57,7 +60,7 @@ class TestCOutPoint:
         # Should be 32 bytes (hash) + 4 bytes (index)
         assert len(serialized) == 36
         assert serialized[:32] == txhash
-        assert serialized[32:] == struct.pack('<I', index)
+        assert serialized[32:] == struct.pack("<I", index)
 
     def test_from_hex(self):
         """Test creating outpoint from hex string."""
@@ -164,17 +167,17 @@ class TestFluxnodeStartTransaction:
         offset = 0
 
         # Header (4 bytes): nVersion | (fOverwintered << 31)
-        header = struct.unpack('<I', serialized[offset:offset+4])[0]
+        header = struct.unpack("<I", serialized[offset : offset + 4])[0]
         assert header == 6  # nVersion=6, fOverwintered=0
         offset += 4
 
         # nType (1 byte)
-        nType = struct.unpack('b', serialized[offset:offset+1])[0]
+        nType = struct.unpack("b", serialized[offset : offset + 1])[0]
         assert nType == 0x02
         offset += 1
 
         # nFluxTxVersion (4 bytes)
-        nFluxTxVersion = struct.unpack('<i', serialized[offset:offset+4])[0]
+        nFluxTxVersion = struct.unpack("<i", serialized[offset : offset + 4])[0]
         assert nFluxTxVersion == 0x0101
         offset += 4
 
@@ -192,7 +195,7 @@ class TestFluxnodeStartTransaction:
         offset += 1 + 33
 
         # sigTime (4 bytes)
-        sigTime = struct.unpack('<I', serialized[offset:offset+4])[0]
+        sigTime = struct.unpack("<I", serialized[offset : offset + 4])[0]
         assert sigTime == 1234567890
         offset += 4
 
@@ -286,7 +289,7 @@ class TestFluxnodeStartTransaction:
 
         # Should be hex string
         assert isinstance(tx_hex, str)
-        assert all(c in '0123456789abcdef' for c in tx_hex)
+        assert all(c in "0123456789abcdef" for c in tx_hex)
 
         # Should be even length
         assert len(tx_hex) % 2 == 0
@@ -320,3 +323,141 @@ class TestFluxnodeStartTransaction:
         # delegateData are already present in serialize_for_hash.
         # compact_size(65) + 65 bytes (signature) = 66 bytes
         assert len_after == len_before + 66
+
+
+def _bare_multisig_redeemscript(m: int, pubkeys: list) -> bytes:
+    """Build a bare multisig redeem script: OP_m <pubkeys...> OP_n OP_CHECKMULTISIG."""
+    script = bytes([0x50 + m])
+    for pk in pubkeys:
+        script += bytes([len(pk)]) + pk
+    script += bytes([0x50 + len(pubkeys), 0xAE])  # OP_n, OP_CHECKMULTISIG
+    return script
+
+
+class TestFluxnodeStartTransactionP2SH:
+    """Tests for P2SH (SSP multisig) collateral support."""
+
+    REDEEMSCRIPT = _bare_multisig_redeemscript(
+        2,
+        [
+            bytes.fromhex("02" + "11" * 32),
+            bytes.fromhex("03" + "22" * 32),
+            bytes.fromhex("02" + "33" * 32),
+        ],
+    )
+    FLUXNODE_PUBKEY = bytes.fromhex("03" + "00" * 32)
+    COLLATERAL_TXHASH = "0123456789abcdef" * 4
+
+    def test_sets_p2sh_version_flag(self):
+        """P2SH collateral sets nFluxTxVersion to P2SH | DELEGATES."""
+        tx = FluxnodeStartTransaction(
+            collateral_txhash=self.COLLATERAL_TXHASH,
+            collateral_index=0,
+            collateral_redeemscript=self.REDEEMSCRIPT,
+            fluxnode_pubkey=self.FLUXNODE_PUBKEY,
+        )
+
+        assert tx.isP2SH is True
+        assert tx.nFluxTxVersion == 0x0102
+        assert tx.collateralPubkey is None
+        assert tx.collateralRedeemScript == self.REDEEMSCRIPT
+
+    def test_pubkey_and_redeemscript_mutually_exclusive(self):
+        """Providing both collateral_pubkey and collateral_redeemscript is an error."""
+        with pytest.raises(TransactionError):
+            FluxnodeStartTransaction(
+                collateral_txhash=self.COLLATERAL_TXHASH,
+                collateral_index=0,
+                collateral_pubkey=bytes.fromhex("02" + "00" * 32),
+                collateral_redeemscript=self.REDEEMSCRIPT,
+                fluxnode_pubkey=self.FLUXNODE_PUBKEY,
+            )
+
+    def test_requires_one_collateral_type(self):
+        """Providing neither collateral_pubkey nor collateral_redeemscript is an error."""
+        with pytest.raises(TransactionError):
+            FluxnodeStartTransaction(
+                collateral_txhash=self.COLLATERAL_TXHASH,
+                collateral_index=0,
+                fluxnode_pubkey=self.FLUXNODE_PUBKEY,
+            )
+
+    def test_redeemscript_must_end_in_checkmultisig(self):
+        """A redeem script not ending in OP_CHECKMULTISIG (0xAE) is rejected."""
+        with pytest.raises(TransactionError):
+            FluxnodeStartTransaction(
+                collateral_txhash=self.COLLATERAL_TXHASH,
+                collateral_index=0,
+                collateral_redeemscript=b"\x51\x52\x53",
+                fluxnode_pubkey=self.FLUXNODE_PUBKEY,
+            )
+
+    def test_empty_redeemscript_rejected(self):
+        """An empty redeem script is rejected."""
+        with pytest.raises(TransactionError):
+            FluxnodeStartTransaction(
+                collateral_txhash=self.COLLATERAL_TXHASH,
+                collateral_index=0,
+                collateral_redeemscript=b"",
+                fluxnode_pubkey=self.FLUXNODE_PUBKEY,
+            )
+
+    def test_serialization_order(self):
+        """
+        P2SH wire order is collateralIn -> pubKey -> redeemscript -> sigTime,
+        with NO collateralPubkey field at all (verified against fluxd's
+        CTransaction::SerializationOp for FLUXNODE_TX_UPGRADEABLE_VERSION).
+        """
+        tx = FluxnodeStartTransaction(
+            collateral_txhash=self.COLLATERAL_TXHASH,
+            collateral_index=0,
+            collateral_redeemscript=self.REDEEMSCRIPT,
+            fluxnode_pubkey=self.FLUXNODE_PUBKEY,
+            sig_time=1234567890,
+        )
+
+        serialized = tx.serialize_for_hash()
+        offset = 0
+
+        offset += 4  # header
+        offset += 1  # nType
+        offset += 4  # nFluxTxVersion
+        offset += 36  # collateralIn
+
+        # pubKey (fluxnode pubkey) comes FIRST in the P2SH path
+        pubkey_size = serialized[offset]
+        assert pubkey_size == 33
+        offset += 1 + 33
+
+        # Then the redeem script (no collateralPubkey field in between)
+        redeemscript_size = serialized[offset]
+        assert redeemscript_size == len(self.REDEEMSCRIPT)
+        offset += 1 + redeemscript_size
+
+        sig_time = struct.unpack("<I", serialized[offset : offset + 4])[0]
+        assert sig_time == 1234567890
+        offset += 4
+
+        # fUsingDelegates (1 byte) + delegateData (2 bytes)
+        assert serialized[offset] == 1
+        offset += 1 + 2
+
+        assert offset == len(serialized)
+
+    def test_sign_and_to_hex(self):
+        """A P2SH-collateral transaction can be signed and hex-encoded."""
+        wif = "KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU73sVHnoWn"
+        privkey, _ = decode_wif(wif)
+
+        tx = FluxnodeStartTransaction(
+            collateral_txhash=self.COLLATERAL_TXHASH,
+            collateral_index=0,
+            collateral_redeemscript=self.REDEEMSCRIPT,
+            fluxnode_pubkey=self.FLUXNODE_PUBKEY,
+        )
+        tx.sign(privkey)
+        tx_hex = tx.to_hex()
+
+        assert isinstance(tx_hex, str)
+        assert len(tx.sig) == 65
+        assert all(c in "0123456789abcdef" for c in tx_hex)

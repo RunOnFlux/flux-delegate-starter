@@ -4,12 +4,12 @@ import pytest
 
 from flux_delegate_starter.crypto import (
     decode_wif,
+    hash160,
+    hash256,
     privkey_to_pubkey,
+    sha256,
     sign_compact,
     verify_compact_signature,
-    sha256,
-    hash256,
-    hash160,
 )
 
 
@@ -56,7 +56,9 @@ class TestPublicKeyDerivation:
     def test_compressed_pubkey(self):
         """Test deriving compressed public key."""
         # Known private key
-        privkey = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000001")
+        privkey = bytes.fromhex(
+            "0000000000000000000000000000000000000000000000000000000000000001"
+        )
 
         pubkey = privkey_to_pubkey(privkey, compressed=True)
 
@@ -65,7 +67,9 @@ class TestPublicKeyDerivation:
 
     def test_uncompressed_pubkey(self):
         """Test deriving uncompressed public key."""
-        privkey = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000001")
+        privkey = bytes.fromhex(
+            "0000000000000000000000000000000000000000000000000000000000000001"
+        )
 
         pubkey = privkey_to_pubkey(privkey, compressed=False)
 
@@ -78,7 +82,9 @@ class TestSigning:
 
     def test_sign_and_verify(self):
         """Test signing and verifying a message."""
-        privkey = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000001")
+        privkey = bytes.fromhex(
+            "0000000000000000000000000000000000000000000000000000000000000001"
+        )
         pubkey = privkey_to_pubkey(privkey, compressed=True)
 
         message = b"Test message"
@@ -95,7 +101,9 @@ class TestSigning:
 
     def test_verify_invalid_signature(self):
         """Test that invalid signature fails verification."""
-        privkey = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000001")
+        privkey = bytes.fromhex(
+            "0000000000000000000000000000000000000000000000000000000000000001"
+        )
         pubkey = privkey_to_pubkey(privkey, compressed=True)
 
         message_hash = sha256(b"Test message")
@@ -110,10 +118,13 @@ class TestSigning:
 
     def test_verify_wrong_pubkey(self):
         """Test that signature fails with wrong public key."""
-        privkey1 = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000001")
-        privkey2 = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000002")
+        privkey1 = bytes.fromhex(
+            "0000000000000000000000000000000000000000000000000000000000000001"
+        )
+        privkey2 = bytes.fromhex(
+            "0000000000000000000000000000000000000000000000000000000000000002"
+        )
 
-        pubkey1 = privkey_to_pubkey(privkey1, compressed=True)
         pubkey2 = privkey_to_pubkey(privkey2, compressed=True)
 
         message_hash = sha256(b"Test message")
@@ -134,7 +145,9 @@ class TestHashFunctions:
 
         assert len(hash_result) == 32
         # Known SHA256 of "Hello, World!"
-        expected = bytes.fromhex("dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f")
+        expected = bytes.fromhex(
+            "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
+        )
         assert hash_result == expected
 
     def test_hash256(self):
@@ -161,7 +174,9 @@ class TestZelcashMessageSigning:
 
     def test_zelcash_message_format(self):
         """Test Zelcash message signing format."""
-        privkey = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000001")
+        privkey = bytes.fromhex(
+            "0000000000000000000000000000000000000000000000000000000000000001"
+        )
         pubkey = privkey_to_pubkey(privkey, compressed=True)
 
         # Simulate transaction hash
@@ -169,7 +184,7 @@ class TestZelcashMessageSigning:
 
         # Build message with Zelcash magic (as done in transaction signing)
         message_magic = b"Zelcash Signed Message:\n"
-        message = message_magic + tx_hash.hex().encode('ascii')
+        message = message_magic + tx_hash.hex().encode("ascii")
         message_hash = sha256(message)
 
         # Sign

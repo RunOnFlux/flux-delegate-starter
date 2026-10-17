@@ -1,13 +1,12 @@
 """Cryptographic operations for fluxnode transactions."""
 
 import hashlib
-from typing import Tuple
 
 import base58
 from coincurve import PrivateKey, PublicKey
 
 
-def decode_wif(wif: str) -> Tuple[bytes, bool]:
+def decode_wif(wif: str) -> tuple[bytes, bool]:
     """
     Decode WIF (Wallet Import Format) to private key bytes and compressed flag.
 
@@ -23,7 +22,7 @@ def decode_wif(wif: str) -> Tuple[bytes, bool]:
     try:
         decoded = base58.b58decode_check(wif)
     except Exception as e:
-        raise ValueError(f"Invalid WIF format: {e}")
+        raise ValueError(f"Invalid WIF format: {e}") from e
 
     if len(decoded) < 33:
         raise ValueError("WIF too short")
@@ -91,21 +90,15 @@ def sign_compact(message_hash: bytes, privkey: bytes) -> bytes:
     is_compressed = len(pubkey.format(compressed=True)) == 33
 
     # Apply Bitcoin compact format offset
-    if is_compressed:
-        # Compressed: 31 + recovery_id (31-34)
-        compact_byte = 31 + recovery_id
-    else:
-        # Uncompressed: 27 + recovery_id (27-30)
-        compact_byte = 27 + recovery_id
+    # Compressed: 31 + recovery_id (31-34), Uncompressed: 27 + recovery_id (27-30)
+    compact_byte = (31 if is_compressed else 27) + recovery_id
 
     # Return Bitcoin compact signature format: [compact_byte, r, s]
     return bytes([compact_byte]) + r + s
 
 
 def verify_compact_signature(
-    message_hash: bytes,
-    signature: bytes,
-    expected_pubkey: bytes
+    message_hash: bytes, signature: bytes, expected_pubkey: bytes
 ) -> bool:
     """
     Verify a Bitcoin compact signature against an expected public key.
@@ -197,7 +190,7 @@ def ripemd160(data: bytes) -> bytes:
     Returns:
         20-byte hash
     """
-    h = hashlib.new('ripemd160')
+    h = hashlib.new("ripemd160")
     h.update(data)
     return h.digest()
 
@@ -232,11 +225,11 @@ def pubkey_to_address(pubkey: bytes, version: int = 0x1CB8) -> str:
     pubkey_hash = hash160(pubkey)
 
     # Add version bytes (Flux uses 2 bytes: 0x1C 0xB8)
-    version_bytes = version.to_bytes(2, 'big')
+    version_bytes = version.to_bytes(2, "big")
     versioned = version_bytes + pubkey_hash
 
     # Add checksum and encode
     checksum = hash256(versioned)[:4]
     address_bytes = versioned + checksum
 
-    return base58.b58encode(address_bytes).decode('ascii')
+    return base58.b58encode(address_bytes).decode("ascii")
