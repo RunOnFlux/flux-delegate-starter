@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 
 from flux_delegate_starter.exceptions import ConfigError, RPCError
@@ -21,8 +22,7 @@ class TestFluxRPCClient:
         )
 
         assert client.base_url == "http://localhost:16124"
-        assert client._auth.login == "user"
-        assert client._auth.password == "pass"
+        assert client._auth_header == aiohttp.encode_basic_auth("user", "pass")
 
     def test_missing_credentials(self):
         """Test that missing credentials raises ConfigError."""

@@ -45,7 +45,7 @@ class FluxRPCClient:
                 "RPC authentication required: provide --rpc-user and --rpc-password"
             )
 
-        self._auth = aiohttp.BasicAuth(username, password)
+        self._auth_header = aiohttp.encode_basic_auth(username, password)
 
     async def call(self, method: str, *params: Any) -> Any:
         """
@@ -77,9 +77,11 @@ class FluxRPCClient:
             aiohttp.ClientSession(timeout=timeout) as session,
             session.post(
                 self.base_url,
-                auth=self._auth,
                 json=payload,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": self._auth_header,
+                },
             ) as response,
         ):
             response.raise_for_status()
